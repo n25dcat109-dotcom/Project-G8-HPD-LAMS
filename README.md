@@ -1,4 +1,23 @@
-﻿# Phase 1 — Phân công nhiệm vụ
+﻿﻿# Project-G8-HPD-LAMS
+
+## Database Project Report
+**Due Date:** 26/08/2026 - Week 3  
+**Project ID & Title:** #8 - Digital Library & Open-Access Repository Management System
+
+---
+
+### A. Project Identity
+
+* **Team Name:** G8
+* **Team Members:**
+  * Nguyễn Trung Thiện (`n25dcat107@gmail.student.ptithcm.edu.vn`) - GitHub: @thiennguyentrung123-png
+  * Trần Nguyễn Quốc Thịnh (`n25dcat109@gmail.student.ptithcm.edu.vn`) - GitHub: @n25dcat109-dotcom
+  * Nguyễn Phúc Thịnh (`n22dccn182@gmail.student.ptithcm.edu.vn`) - GitHub: @Darkbreaker2412
+* **Project Title:** Design and Implementation of a Relational Database for Academic Open-Access Digital Library and Repository System
+
+---
+
+# Phase 1 — Phân công nhiệm vụ
 
 > **Mục tiêu Phase 1:** Xác định bài toán, yêu cầu nghiệp vụ và thiết kế EER sơ bộ cho hệ thống **Open-Access Repository**.
 

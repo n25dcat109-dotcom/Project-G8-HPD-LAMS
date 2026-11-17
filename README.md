@@ -2,15 +2,14 @@
 
 > **Project Title:** Design and Implementation of a Relational Database for Academic Open-Access Digital Library and Repository System  
 > **Course:** Database Management Systems / Cơ sở dữ liệu (PTITHCM)  
-> **Instructor:** ThS. Lê Hà Thanh (`lehathanh@ptithcm.edu.vn`) — *Đã được thêm vào repository với quyền thành viên dự án*  
-> **Due Date:** 26/08/2026 (Week 3)
+> **Instructor:** ThS. Lê Hà Thanh 
+> **Due Date:** 17/11/2026
 
 ---
 
 ## 👥 Project Identity & Team Members
 
 * **Team Name:** G8
-* **Repository URL:** `<Điền đường dẫn GitHub Repo của nhóm tại đây>`
 * **Team Members (Sinh viên PTITHCM):**
 
 | STT | Họ và Tên | MSSV | Lớp / Khóa học | Email Sinh viên (PTITHCM) | GitHub |

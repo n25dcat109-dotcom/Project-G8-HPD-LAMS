@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DLOAR System - Demo Cơ sở dữ liệu Toàn diện (Nhóm G8)</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f4f6f9; font-size: 0.9rem; }
+        .navbar-brand { font-weight: 700; letter-spacing: 0.3px; }
+        .card { border: none; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 1.25rem; }
+        .card-header { font-weight: 600; border-radius: 10px 10px 0 0 !important; }
+        .table-sm th, .table-sm td { vertical-align: middle; }
+        .code-pill { font-family: monospace; background: #eef2f7; padding: 2px 6px; border-radius: 4px; color: #c7254e; }
+        .kpi-card { border-left: 4px solid #0d6efd; background: #fff; border-radius: 8px; padding: 10px 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+        .kpi-val { font-size: 1.35rem; font-weight: 700; color: #0d6efd; line-height: 1.2; }
+        .kpi-lbl { font-size: 0.78rem; color: #6c757d; text-transform: uppercase; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+<!-- THANH ĐIỀU HƯỚNG & CHUYỂN ĐỔI VAI TRÒ RBAC -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top shadow-sm">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand" href="/">
+            📚 DLOAR Management System <span class="badge bg-light text-primary ms-1">Nhóm G8 - Full Data</span>
+        </a>
+        <div class="d-flex align-items-center gap-3">
+            <span class="badge {{ role_info.badge }} py-2 px-3">{{ role_info.label }}</span>
+            <form action="/switch_role" method="POST" class="d-flex align-items-center gap-2">
+                <label class="text-white small text-nowrap mb-0">Đổi vai trò kết nối MySQL:</label>
+                <select name="role" class="form-select form-select-sm" onchange="this.form.submit()">
+                    {% for key, info in roles.items() %}
+                        <option value="{{ key }}" {% if role == key %}selected{% endif %}>{{ info.label }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid px-4 py-3">
+    <!-- THÔNG TIN PHIÊN KẾT NỐI -->
+    <div class="alert alert-secondary py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <strong>Tài khoản MySQL:</strong> <span class="code-pill">{{ role_info.user }}@localhost</span> — {{ role_info.desc }}
+        </div>
+        <span class="badge bg-dark">Chế độ: Không giới hạn SQL LIMIT (100% bản ghi & thuộc tính)</span>
+    </div>
+
+    <!-- THÔNG BÁO PHẢN HỒI TỪ MYSQL -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, msg in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm" role="alert">
+                    <strong>Thông báo hệ thống:</strong> {{ msg }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- =====================================================================
+         PHÂN HỆ 1: ĐỘC GIẢ (reader_user) - TOÀN BỘ DỮ LIỆU CÔNG KHAI
+         ===================================================================== -->
+    {% if role == 'reader' %}
+    <!-- KPI Độc giả -->
+    <div class="row g-2 mb-3">
+        <div class="col-md-3"><div class="kpi-card"><div class="kpi-lbl">Tài liệu số Mở công khai</div><div class="kpi-val">{{ data.kpi.public_digital or 0 }}</div></div></div>
+        <div class="col-md-3"><div class="kpi-card" style="border-color:#198754;"><div class="kpi-lbl">Tổng đầu sách vật lý</div><div class="kpi-val text-success">{{ data.kpi.physical_books or 0 }}</div></div></div>
+        <div class="col-md-3"><div class="kpi-card" style="border-color:#0dcaf0;"><div class="kpi-lbl">Tổng bản sao sách</div><div class="kpi-val text-info">{{ data.kpi.total_copies or 0 }}</div></div></div>
+        <div class="col-md-3"><div class="kpi-card" style="border-color:#ffc107;"><div class="kpi-lbl">Bản sao sẵn sàng (Available)</div><div class="kpi-val text-warning">{{ data.kpi.available_copies or 0 }}</div></div></div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-info text-dark d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span>🔍 Tra cứu Toàn bộ Kho Tài liệu Mở & Danh mục Sách Vật lý (Quyền reader_user)</span>
+            <div class="d-flex gap-2 flex-wrap">
+                <form action="/demo_test/r03b_reader_barcode" method="POST">
+                    <button class="btn btn-sm btn-outline-danger">Test R-03b: Đọc cột barcode (Lỗi 1143)</button>
+                </form>
+                <form action="/demo_test/r04_reader_email" method="POST">
+                    <button class="btn btn-sm btn-outline-danger">Test R-04: Đọc email person (Lỗi 1142)</button>
+                </form>
+                <form action="/demo_test/r05_reader_insert" method="POST">
+                    <button class="btn btn-sm btn-outline-danger">Test R-05: Thêm book_copy (Lỗi 1142)</button>
+                </form>
+            </div>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="/" class="row g-2 mb-3">
+                <div class="col-md-10">
+                    <input type="text" name="q" value="{{ keyword }}" class="form-control"
+                           placeholder="Lọc trực tiếp trên CSDL theo tiêu đề, DOI, ISBN, nhà xuất bản hoặc danh mục (để trống để xem tất cả)...">
+                </div>
+                <div class="col-md-2 d-grid">
+                    <button type="submit" class="btn btn-primary">Lọc trên MySQL</button>
+                </div>
+            </form>
+
+            <h6 class="fw-bold text-primary">1. Kho Tài liệu số Mở công khai (View: <code>vw_public_repository_catalog</code> — {{ data.digital_catalog|length }} bản ghi)</h6>
+            <div class="table-responsive mb-4">
+                <table class="table table-bordered table-hover table-sm datatable">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Item ID</th>
+                            <th>Tiêu đề tài liệu</th>
+                            <th>DOI</th>
+                            <th>Mã giấy phép</th>
+                            <th>Tên giấy phép</th>
+                            <th>Danh mục</th>
+                            <th>Đường dẫn tệp</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in data.digital_catalog %}
+                        <tr>
+                            <td>{{ item.item_id }}</td>
+                            <td><strong>{{ item.title }}</strong></td>
+                            <td><span class="code-pill">{{ item.doi or 'N/A' }}</span></td>
+                            <td><span class="badge bg-success">{{ item.license_code }}</span></td>
+                            <td class="small">{{ item.license_name }}</td>
+                            <td>{{ item.categories or '-' }}</td>
+                            <td class="text-muted small">{{ item.file_path }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-7">
+                    <h6 class="fw-bold text-primary">2. Danh mục Đầu sách Vật lý (<code>physical_book</code> — {{ data.physical_books|length }} bản ghi)</h6>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm datatable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Book ID</th>
+                                    <th>Tên sách</th>
+                                    <th>ISBN</th>
+                                    <th>Nhà xuất bản</th>
+                                    <th>Năm XB</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for b in data.physical_books %}
+                                <tr>
+                                    <td>{{ b.book_id }}</td>
+                                    <td>{{ b.title }}</td>
+                                    <td><span class="code-pill">{{ b.isbn }}</span></td>
+                                    <td>{{ b.publisher or '-' }}</td>
+                                    <td>{{ b.publication_year or '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <h6 class="fw-bold text-primary">3. Bản sao Sách (<code>book_copy</code> — {{ data.book_copies|length }} bản ghi, ẩn cột nhạy cảm <code>barcode</code>)</h6>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm datatable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Copy ID</th>
+                                    <th>Book ID</th>
+                                    <th>Trạng thái</th>
+                                    <th>Vị trí kệ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for c in data.book_copies %}
+                                <tr>
+                                    <td>{{ c.copy_id }}</td>
+                                    <td>#{{ c.book_id }}</td>
+                                    <td>
+                                        <span class="badge {% if c.copy_status=='Available' %}bg-success{% elif c.copy_status=='Borrowed' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                                            {{ c.copy_status }}
+                                        </span>
+                                    </td>
+                                    <td>{{ c.shelf_location or '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- =====================================================================
+         PHÂN HỆ 2: THỦ THƯ (librarian_user) - TOÀN BỘ NGHIỆP VỤ & LỊCH SỬ
+         ===================================================================== -->
+    {% if role == 'librarian' %}
+    <!-- KPI Thủ thư -->
+    <div class="row g-2 mb-3">
+        <div class="col-md-2"><div class="kpi-card"><div class="kpi-lbl">Tổng Độc giả</div><div class="kpi-val">{{ data.kpi.total_members or 0 }}</div></div></div>
+        <div class="col-md-2"><div class="kpi-card" style="border-color:#198754;"><div class="kpi-lbl">Đang mượn (Active)</div><div class="kpi-val text-success">{{ data.kpi.active_loans or 0 }}</div></div></div>
+        <div class="col-md-2"><div class="kpi-card" style="border-color:#0dcaf0;"><div class="kpi-lbl">Tổng giao dịch</div><div class="kpi-val text-info">{{ data.kpi.total_transactions or 0 }}</div></div></div>
+        <div class="col-md-2"><div class="kpi-card" style="border-color:#6f42c1;"><div class="kpi-lbl">Bản sao sẵn sàng</div><div class="kpi-val" style="color:#6f42c1;">{{ data.kpi.available_copies or 0 }}/{{ data.kpi.total_copies or 0 }}</div></div></div>
+        <div class="col-md-2"><div class="kpi-card" style="border-color:#dc3545;"><div class="kpi-lbl">Phiếu phạt chưa thu</div><div class="kpi-val text-danger">{{ data.kpi.unpaid_fines_count or 0 }}</div></div></div>
+        <div class="col-md-2"><div class="kpi-card" style="border-color:#fd7e14;"><div class="kpi-lbl">Tổng nợ phạt (VNĐ)</div><div class="kpi-val" style="color:#fd7e14;">{{ "{:,.0f}".format(data.kpi.unpaid_fines_sum or 0) }}</div></div></div>
+    </div>
+
+    <div class="row">
+        <!-- CỘT TRÁI: THAO TÁC MƯỢN SÁCH, BẢN SAO, THÀNH VIÊN & TEST RBAC -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">📖 FR-03: Lập Phiếu Mượn Sách (Trigger Validation)</div>
+                <div class="card-body">
+                    <form action="/borrow" method="POST">
+                        <div class="mb-2">
+                            <label class="form-label fw-bold">Mã thành viên (<code>member_id</code>)</label>
+                            <input type="number" name="member_id" id="inp_member_id" class="form-control form-control-sm" value="1" required>
+                            <div class="form-text">Seed test: <b>1</b> (Active), <b>7</b> (Expired), <b>10</b> (Suspended)</div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label fw-bold">Mã bản sao sách (<code>copy_id</code>)</label>
+                            <input type="number" name="copy_id" id="inp_copy_id" class="form-control form-control-sm" value="1" required>
+                            <div class="form-text">Seed test: <b>1</b> (Available), <b>1500</b> (Borrowed), <b>2200</b> (Lost), <b>52</b> (Active)</div>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label small">Ngày mượn</label>
+                                <input type="date" name="borrow_date" class="form-control form-control-sm" value="{{ today }}" required>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">Hạn trả</label>
+                                <input type="date" name="due_date" class="form-control form-control-sm" value="{{ default_due }}" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold">Xác nhận cho mượn</button>
+                    </form>
+
+                    <hr>
+                    <p class="small fw-bold mb-1">Điền nhanh kịch bản kiểm thử Mục 5.1:</p>
+                    <div class="d-flex flex-wrap gap-1 mb-3">
+                        <button type="button" class="btn btn-sm btn-outline-success" onclick="fillBorrow(1, 1)">TC-31: Hợp lệ (1,1)</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="fillBorrow(10, 1)">TC-38: Suspended</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="fillBorrow(7, 1)">TC-39: Expired</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="fillBorrow(1, 2200)">TC-41: Lost</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="fillBorrow(1, 1500)">TC-42: Borrowed</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="fillBorrow(1, 52)">TC-43: Active Loan</button>
+                    </div>
+
+                    <p class="small fw-bold text-danger mb-1">Kiểm thử giới hạn quyền Thủ thư (RBAC R-10 → R-14):</p>
+                    <div class="d-grid gap-1">
+                        <form action="/demo_test/r10_lib_update_amount" method="POST">
+                            <button class="btn btn-sm btn-outline-danger w-100 text-start">Test R-10: Sửa fine_amount = 0 (Lỗi 1143)</button>
+                        </form>
+                        <form action="/demo_test/r11_lib_delete_fine" method="POST">
+                            <button class="btn btn-sm btn-outline-danger w-100 text-start">Test R-11: Xóa tiền phạt DELETE (Lỗi 1142)</button>
+                        </form>
+                        <form action="/demo_test/r12_lib_delete_tx" method="POST">
+                            <button class="btn btn-sm btn-outline-danger w-100 text-start">Test R-12: Xóa giao dịch DELETE (Lỗi 1142)</button>
+                        </form>
+                        <form action="/demo_test/r13_lib_insert_digital" method="POST">
+                            <button class="btn btn-sm btn-outline-danger w-100 text-start">Test R-13: Thêm digital_item (Lỗi 1142)</button>
+                        </form>
+                        <form action="/demo_test/r14_lib_select_license" method="POST">
+                            <button class="btn btn-sm btn-outline-danger w-100 text-start">Test R-14: Đọc bảng license (Lỗi 1142)</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CẬP NHẬT TRẠNG THÁI BẢN SAO -->
+            <div class="card">
+                <div class="card-header bg-dark text-white">🏷️ FR-02: Cập nhật Trạng thái Bản sao (Trigger Phạt Hỏng/Mất)</div>
+                <div class="card-body">
+                    <form action="/copies/status" method="POST" class="row g-2">
+                        <div class="col-5">
+                            <label class="form-label small">Copy ID</label>
+                            <input type="number" name="copy_id" class="form-control form-control-sm" value="52" required>
+                        </div>
+                        <div class="col-7">
+                            <label class="form-label small">Trạng thái mới</label>
+                            <select name="copy_status" class="form-select form-select-sm">
+                                <option value="Available">Available (Sẵn sàng)</option>
+                                <option value="Damaged">Damaged (Hỏng → Phạt 50k)</option>
+                                <option value="Lost">Lost (Mất → Phạt 200k)</option>
+                                <option value="In_Maintenance">In_Maintenance (Bảo trì)</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-sm btn-warning w-100 fw-bold">Cập nhật trạng thái</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- CẬP NHẬT THẺ THÀNH VIÊN -->
+            <div class="card">
+                <div class="card-header bg-secondary text-white">🪪 BR-02: Cập nhật Thẻ Thành viên</div>
+                <div class="card-body">
+                    <form action="/members/update" method="POST" class="row g-2">
+                        <div class="col-4">
+                            <label class="form-label small">Member ID</label>
+                            <input type="number" name="person_id" class="form-control form-control-sm" value="7" required>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small">Trạng thái</label>
+                            <select name="membership_status" class="form-select form-select-sm">
+                                <option value="Active">Active</option>
+                                <option value="Expired">Expired</option>
+                                <option value="Suspended">Suspended</option>
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small">Hạn mức</label>
+                            <input type="number" name="max_borrow_limit" class="form-control form-control-sm" value="5" min="1">
+                        </div>
+                        <div class="col-7">
+                            <input type="date" name="expiry_date" class="form-control form-control-sm" value="2028-12-31" required>
+                        </div>
+                        <div class="col-5">
+                            <button type="submit" class="btn btn-sm btn-dark w-100">Lưu thẻ</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- CỘT PHẢI: TABS TOÀN BỘ DỮ LIỆU NGHIỆP VỤ CỦA THỦ THƯ -->
+        <div class="col-lg-8">
+            <ul class="nav nav-tabs mb-3 fw-bold">
+                <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#lib-active">🔄 Đang mượn ({{ data.active_loans|length }})</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#lib-fines">💰 Tiền phạt ({{ data.fines|length }})</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#lib-history">📜 Lịch sử mượn-trả ({{ data.all_transactions|length }})</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#lib-copies">📚 Bản sao sách ({{ data.book_copies|length }})</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#lib-members">👥 Thành viên ({{ data.members|length }})</button></li>
+            </ul>
+
+            <div class="tab-content">
+                <!-- TAB 1: ĐANG MƯỢN -->
+                <div class="tab-pane fade show active" id="lib-active">
+                    <div class="card">
+                        <div class="card-header bg-success text-white">Giao dịch đang mượn (View: <code>vw_active_loans</code> — Toàn bộ {{ data.active_loans|length }} dòng)</div>
+                        <div class="card-body table-responsive">
+                            <table class="table table-bordered table-hover table-sm datatable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>TX ID</th>
+                                        <th>Độc giả (Email)</th>
+                                        <th>Sách & Barcode</th>
+                                        <th>Ngày mượn / Hạn trả</th>
+                                        <th>Ghi nhận trả sách</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for loan in data.active_loans %}
+                                    <tr>
+                                        <td><strong>#{{ loan.transaction_id }}</strong></td>
+                                        <td>{{ loan.member_name }} ({{ loan.member_code }})<br><span class="text-muted small">{{ loan.email }}</span></td>
+                                        <td>{{ loan.book_title }}<br><span class="code-pill">{{ loan.barcode }}</span></td>
+                                        <td>
+                                            Mượn: {{ loan.borrow_date }}<br>
+                                            Hạn: <strong>{{ loan.due_date }}</strong>
+                                            {% if loan.days_overdue > 0 %}<span class="badge bg-danger ms-1">Trễ {{ loan.days_overdue }} ngày</span>{% endif %}
+                                        </td>
+                                        <td>
+                                            <form action="/return/{{ loan.transaction_id }}" method="POST" class="d-flex gap-1">
+                                                <input type="date" name="return_date" class="form-control form-control-sm" value="{{ today }}" required>
+                                                <button type="submit" class="btn btn-sm btn-success text-nowrap">Trả</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: TIỀN PHẠT & TỔNG HỢP NỢ -->
+                <div class="tab-pane fade" id="lib-fines">
+                    <div class="card">
+                        <div class="card-header bg-warning text-dark">Danh sách Tiền phạt (<code>fine</code> — Toàn bộ {{ data.fines|length }} bản ghi)</div>
+                        <div class="card-body table-responsive">
+                            <table class="table table-bordered table-hover table-sm datatable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Fine ID</th>
+                                        <th>TX ID</th>
+                                        <th>Độc giả</th>
+                                        <th>Số tiền (VNĐ)</th>
+                                        <th>Lý do phạt</th>
+                                        <th>Trạng thái / Ngày nộp</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for f in data.fines %}
+                                    <tr>
+                                        <td>#{{ f.fine_id }}</td>
+                                        <td>#{{ f.transaction_id }}</td>
+                                        <td>{{ f.member_name }} ({{ f.member_code }})</td>
+                                        <td class="fw-bold text-danger">{{ "{:,.0f}".format(f.fine_amount) }}</td>
+                                        <td>{{ f.fine_reason }}</td>
+                                        <td>
+                                            {% if f.fine_status == 'Unpaid' %}
+                                                <form action="/fines/pay/{{ f.fine_id }}" method="POST">
+                                                    <button type="submit" class="btn btn-sm btn-outline-success">Thu phạt (Paid)</button>
+                                                </form>
+                                            {% else %}
+                                                <span class="badge bg-success">Paid ({{ f.payment_date }})</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: LỊCH SỬ MƯỢN TRẢ TOÀN HỆ THỐNG -->
+                <div class="tab-pane fade" id="lib-history">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">Toàn bộ Lịch sử Giao dịch Mượn - Trả (<code>borrow_transaction</code>)</div>
+                        <div class="card-body table-responsive">
+                            <table class="table table-bordered table-sm datatable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>TX ID</th>
+                                        <th>Độc giả</th>
+                                        <th>Bản sao</th>
+                                        <th>Ngày mượn</th>
+                                        <th>Hạn trả</th>
+                                        <th>Ngày trả thực tế</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for tx in data.all_transactions %}
+                                    <tr>
+                                        <td>#{{ tx.transaction_id }}</td>
+                                        <td>{{ tx.member_name }} ({{ tx.member_code }})</td>
+                                        <td>#{{ tx.copy_id }} - {{ tx.book_title }}</td>
+                                        <td>{{ tx.borrow_date }}</td>
+                                        <td>{{ tx.due_date }}</td>
+                                        <td>{{ tx.return_date or 'Đang mượn (NULL)' }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: BẢN SAO SÁCH -->
+                <div class="tab-pane fade" id="lib-copies">
+                    <div class="card">
+                        <div class="card-header bg-dark text-white">Danh sách Bản sao Sách (<code>book_copy</code> — Đầy đủ mã vạch & vị trí)</div>
+                        <div class="card-body table-responsive">
+                            <table class="table table-bordered table-sm datatable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Copy ID</th>
+                                        <th>Đầu sách</th>
+                                        <th>Barcode</th>
+                                        <th>Trạng thái</th>
+                                        <th>Vị trí kệ</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for c in data.book_copies %}
+                                    <tr>
+                                        <td>#{{ c.copy_id }}</td>
+                                        <td>#{{ c.book_id }} - {{ c.title }}</td>
+                                        <td><span class="code-pill">{{ c.barcode }}</span></td>
+                                        <td><span class="badge {% if c.copy_status=='Available' %}bg-success{% elif c.copy_status=='Borrowed' %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ c.copy_status }}</span></td>
+                                        <td>{{ c.shelf_location or '-' }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 5: THÀNH VIÊN -->
+                <div class="tab-pane fade" id="lib-members">
+                    <div class="card">
+                        <div class="card-header bg-info text-dark">Danh sách Thành viên Thư viện (<code>member</code> + <code>person</code>)</div>
+                        <div class="card-body table-responsive">
+                            <table class="table table-bordered table-sm datatable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Mã thẻ</th>
+                                        <th>Họ tên & Liên hệ</th>
+                                        <th>Trạng thái</th>
+                                        <th>Hạn mức</th>
+                                        <th>Ngày hết hạn</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for m in data.members %}
+                                    <tr>
+                                        <td>#{{ m.person_id }}</td>
+                                        <td><code>{{ m.member_code }}</code></td>
+                                        <td><strong>{{ m.last_name }} {{ m.first_name }}</strong><br><span class="small text-muted">{{ m.email }} | {{ m.phone_number or '-' }}</span></td>
+                                        <td><span class="badge {% if m.membership_status=='Active' %}bg-success{% else %}bg-danger{% endif %}">{{ m.membership_status }}</span></td>
+                                        <td>{{ m.max_borrow_limit }}</td>
+                                        <td>{{ m.expiry_date }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- =====================================================================
+         PHÂN HỆ 3: QUẢN TRỊ VIÊN (admin_user) - TOÀN BỘ 13 BẢNG & 10 TRUY VẤN
+         ===================================================================== -->
+    {% if role == 'admin' %}
+    <!-- THANH KPI TỔNG QUAN TOÀN BỘ CSDL (13 BẢNG) -->
+    <div class="row g-2 mb-3">
+        <div class="col-md-2"><div class="kpi-card"><div class="kpi-lbl">Cá nhân (PERSON)</div><div class="kpi-val">{{ data.kpi.persons or 0 }}</div><div class="small text-muted">Overlap M+A: {{ data.kpi.overlap or 0 }}</div></div></div>
+        <div class="col-md-2"><div class="kpi-card" style="border-color:#198754;"><div class="kpi-lbl">Member / Author</div><div class="kpi-val text-success">{{ data.kpi.members or 0 }} / {{ data.kpi.authors or 0 }}</div><div class="small text-muted">Chuyên môn hóa EER</div></div></div>
+        <div class="col-md-2"><div class="kpi-card" style="border-color:#0dcaf0;"><div class="kpi-lbl">Sách / Bản sao</div><div class="kpi-val text-info">{{ data.kpi.books or 0 }} / {{ data.kpi.copies or 0 }}</div><div class="small text-muted">Tài liệu vật lý</div></div></div>
+        <div class="col-md-2"><div class="kpi-card" style="border-color:#6f42c1;"><div class="kpi-lbl">Tài liệu số (Item)</div><div class="kpi-val" style="color:#6f42c1;">{{ data.kpi.digital_items or 0 }}</div><div class="small text-muted">{{ data.kpi.licenses or 0 }} GP | {{ data.kpi.categories or 0 }} DM</div></div></div>
+        <div class="col-md-2"><div class="kpi-card" style="border-color:#fd7e14;"><div class="kpi-lbl">Giao dịch Mượn-Trả</div><div class="kpi-val" style="color:#fd7e14;">{{ data.kpi.transactions or 0 }}</div><div class="small text-muted">Đang mượn: {{ data.kpi.active_loans or 0 }}</div></div></div>
+        <div class="col-md-2"><div class="kpi-card" style="border-color:#dc3545;"><div class="kpi-lbl">Tiền phạt ({{ data.kpi.fines_count or 0 }} phiếu)</div><div class="kpi-val text-danger">{{ "{:,.0f}".format(data.kpi.unpaid_amt or 0) }}đ</div><div class="small text-success">Đã thu: {{ "{:,.0f}".format(data.kpi.paid_amt or 0) }}đ</div></div></div>
+    </div>
+
+    <ul class="nav nav-tabs mb-3 fw-bold" id="adminTabs" role="tablist">
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-queries" type="button">📊 FR-08: 10 Truy vấn Nâng cao & EXPLAIN</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-eer" type="button">👥 FR-01: Person / Member / Author (EER)</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-digital" type="button">🌐 FR-06: Kho Tài liệu số, Giấy phép & Danh mục</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-relations" type="button">🔗 FR-07: Quan hệ N:M (book_author, item_author, item_category)</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-books" type="button">📕 FR-02: Đầu sách & Bản sao</button></li>
+    </ul>
+
+    <div class="tab-content">
+        <!-- TAB 1: 10 TRUY VẤN NÂNG CAO & TEST RÀNG BUỘC -->
+        <div class="tab-pane fade show active" id="tab-queries">
+            <div class="card">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <span>Thực thi 10 Truy vấn Phức tạp (Mục 4.2 Báo cáo — Không giới hạn LIMIT)</span>
+                    <span class="badge bg-success">Thời gian thực thi: {{ data.query_exec_ms }} ms ({{ data.query_result|length }} dòng)</span>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="/" class="row g-2 mb-3">
+                        <div class="col-md-10">
+                            <select name="query_key" class="form-select">
+                                {% for qk, qinfo in advanced_queries.items() %}
+                                    <option value="{{ qk }}" {% if selected_q == qk %}selected{% endif %}>{{ qinfo.title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-grid">
+                            <button type="submit" class="btn btn-primary fw-bold">Chạy truy vấn</button>
+                        </div>
+                    </form>
+
+                    <div class="table-responsive mb-4">
+                        <table class="table table-bordered table-striped table-sm datatable">
+                            <thead class="table-primary">
+                                <tr>
+                                    {% for col in data.query_columns %}<th>{{ col }}</th>{% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in data.query_result %}
+                                <tr>
+                                    {% for col in data.query_columns %}<td>{{ row[col] }}</td>{% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-lg-6">
+                            <h6 class="fw-bold">⚡ Kiểm chứng hiệu năng Chỉ mục <code>idx_borrow_member_status</code> (EXPLAIN):</h6>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm small">
+                                    <thead class="table-light">
+                                        <tr><th>table</th><th>type</th><th>possible_keys</th><th>key</th><th>rows</th><th>Extra</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for ex in data.explain_rows %}
+                                        <tr>
+                                            <td>{{ ex.table }}</td>
+                                            <td><span class="badge bg-success">{{ ex.type }}</span></td>
+                                            <td>{{ ex.possible_keys }}</td>
+                                            <td><strong>{{ ex.key }}</strong></td>
+                                            <td>{{ ex.rows }}</td>
+                                            <td>{{ ex.Extra }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <h6 class="fw-bold text-danger">🛡️ Kiểm thử Ràng buộc CSDL (Mục 5.1 — Tự động ROLLBACK):</h6>
+                            <div class="row g-1">
+                                <div class="col-6"><form action="/demo_test/tc01_dup_email" method="POST"><button class="btn btn-sm btn-outline-danger w-100 text-start">TC-01: Trùng Email (1062)</button></form></div>
+                                <div class="col-6"><form action="/demo_test/tc02_zero_limit" method="POST"><button class="btn btn-sm btn-outline-danger w-100 text-start">TC-02: Limit = 0 (3819)</button></form></div>
+                                <div class="col-6"><form action="/demo_test/tc25_restrict_member" method="POST"><button class="btn btn-sm btn-outline-danger w-100 text-start">TC-25: Xóa Member (1451)</button></form></div>
+                                <div class="col-6"><form action="/demo_test/tc27_restrict_fine_tx" method="POST"><button class="btn btn-sm btn-outline-danger w-100 text-start">TC-27: Xóa TX có phạt (1451)</button></form></div>
+                                <div class="col-6"><form action="/demo_test/tc36_paid_no_date" method="POST"><button class="btn btn-sm btn-outline-danger w-100 text-start">TC-36: Paid thiếu ngày (3819)</button></form></div>
+                                <div class="col-6"><form action="/demo_test/tc37_embargo_no_date" method="POST"><button class="btn btn-sm btn-outline-danger w-100 text-start">TC-37: Embargo thiếu ngày (3819)</button></form></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: FR-01 EER OVERLAPPING PERSON -> MEMBER & AUTHOR -->
+        <div class="tab-pane fade" id="tab-eer">
+            <div class="row">
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">➕ Thêm Cá nhân & Chuyên môn hóa EER (Đầy đủ cột)</div>
+                        <div class="card-body">
+                            <form action="/eer/create_person" method="POST">
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6"><label class="form-label small">Họ & đệm (last_name)</label><input type="text" name="last_name" class="form-control form-control-sm" required></div>
+                                    <div class="col-6"><label class="form-label small">Tên (first_name)</label><input type="text" name="first_name" class="form-control form-control-sm" required></div>
+                                </div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-7"><label class="form-label small">Email (UNIQUE)</label><input type="email" name="email" class="form-control form-control-sm" required></div>
+                                    <div class="col-5"><label class="form-label small">Điện thoại</label><input type="text" name="phone_number" class="form-control form-control-sm"></div>
+                                </div>
+
+                                <div class="border rounded p-2 mb-2 bg-light">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="is_member" value="1" id="chkMem" checked>
+                                        <label class="form-check-label fw-bold small" for="chkMem">Là Độc giả thư viện (MEMBER)</label>
+                                    </div>
+                                    <div class="row g-1 mt-1">
+                                        <div class="col-4"><input type="text" name="member_code" class="form-control form-control-sm" placeholder="Mã thẻ"></div>
+                                        <div class="col-3"><input type="number" name="max_borrow_limit" class="form-control form-control-sm" value="5" title="Hạn mức"></div>
+                                        <div class="col-5"><input type="date" name="expiry_date" class="form-control form-control-sm" value="2028-12-31"></div>
+                                    </div>
+                                </div>
+
+                                <div class="border rounded p-2 mb-3 bg-light">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="is_author" value="1" id="chkAut" checked>
+                                        <label class="form-check-label fw-bold small" for="chkAut">Đồng thời là Tác giả (AUTHOR - Overlap)</label>
+                                    </div>
+                                    <div class="row g-1 mt-1 mb-1">
+                                        <div class="col-4"><input type="text" name="author_code" class="form-control form-control-sm" placeholder="Mã TG"></div>
+                                        <div class="col-4"><input type="text" name="affiliation" class="form-control form-control-sm" placeholder="Đơn vị"></div>
+                                        <div class="col-4"><input type="text" name="orcid" class="form-control form-control-sm" placeholder="ORCID"></div>
+                                    </div>
+                                    <textarea name="bio" class="form-control form-control-sm" rows="2" placeholder="Tiểu sử nghiên cứu (bio)..."></textarea>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold">Lưu hồ sơ (1 lần tại PERSON)</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header bg-secondary text-white">Toàn bộ Hồ sơ PERSON & Chuyên môn hóa MEMBER / AUTHOR ({{ data.persons_eer|length }} bản ghi)</div>
+                        <div class="card-body table-responsive">
+                            <table class="table table-bordered table-sm datatable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Họ tên, Email, SĐT & Ngày tạo</th>
+                                        <th>Vai trò EER</th>
+                                        <th>Thông tin Member</th>
+                                        <th>Thông tin Author & Bio</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for p in data.persons_eer %}
+                                    <tr>
+                                        <td>#{{ p.person_id }}</td>
+                                        <td>
+                                            <strong>{{ p.last_name }} {{ p.first_name }}</strong><br>
+                                            <span class="small text-muted">{{ p.email }} | {{ p.phone_number or '-' }}</span><br>
+                                            <span class="small text-secondary">Tạo: {{ p.created_at }}</span>
+                                        </td>
+                                        <td>
+                                            {% if p.member_code and p.author_code %}<span class="badge bg-danger">Overlap (M + A)</span>
+                                            {% elif p.member_code %}<span class="badge bg-primary">Chỉ Member</span>
+                                            {% elif p.author_code %}<span class="badge bg-info text-dark">Chỉ Author</span>
+                                            {% else %}<span class="badge bg-secondary">Partial (Person)</span>{% endif %}
+                                        </td>
+                                        <td class="small">
+                                            {% if p.member_code %}
+                                                <code>{{ p.member_code }}</code> ({{ p.membership_status }})<br>
+                                                Hạn mức: {{ p.max_borrow_limit }} | Hết hạn: {{ p.expiry_date }}
+                                            {% else %}-{% endif %}
+                                        </td>
+                                        <td class="small">
+                                            {% if p.author_code %}
+                                                <code>{{ p.author_code }}</code> | ORCID: {{ p.orcid or '-' }}<br>
+                                                ĐV: {{ p.affiliation or '-' }} | Bio: {{ p.bio or '-' }}
+                                            {% else %}-{% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: FR-06 KHO TÀI LIỆU SỐ, GIẤY PHÉP & DANH MỤC -->
+        <div class="tab-pane fade" id="tab-digital">
+            <div class="row">
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">🌐 Đăng tải Tài liệu số (Đầy đủ cột incl. Abstract)</div>
+                        <div class="card-body">
+                            <form action="/digital/add" method="POST">
+                                <div class="mb-2"><label class="form-label small">Tiêu đề tài liệu</label><input type="text" name="title" class="form-control form-control-sm" required></div>
+                                <div class="mb-2"><label class="form-label small">Tóm tắt nghiên cứu (<code>abstract</code>)</label><textarea name="abstract" class="form-control form-control-sm" rows="2"></textarea></div>
+                                <div class="mb-2">
+                                    <label class="form-label small">Giấy phép Open Access</label>
+                                    <select name="license_id" class="form-select form-select-sm">
+                                        {% for lic in data.licenses %}<option value="{{ lic.license_id }}">{{ lic.license_code }} - {{ lic.license_name }}</option>{% endfor %}
+                                    </select>
+                                </div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-8"><label class="form-label small">DOI (UNIQUE)</label><input type="text" name="doi" class="form-control form-control-sm"></div>
+                                    <div class="col-4"><label class="form-label small">Định dạng</label><input type="text" name="file_format" class="form-control form-control-sm" value="PDF"></div>
+                                </div>
+                                <div class="mb-2"><label class="form-label small">Đường dẫn tệp (<code>file_path</code>)</label><input type="text" name="file_path" class="form-control form-control-sm" value="/repository/2026/doc.pdf" required></div>
+                                <div class="row g-2 mb-3">
+                                    <div class="col-6">
+                                        <label class="form-label small">Mức truy cập</label>
+                                        <select name="access_level" class="form-select form-select-sm">
+                                            <option value="Public_Open_Access">Public_Open_Access</option>
+                                            <option value="Restricted_Campus_Only">Restricted_Campus_Only</option>
+                                            <option value="Embargoed">Embargoed</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-6"><label class="form-label small">Hết hạn Embargo</label><input type="date" name="embargo_end_date" class="form-control form-control-sm"></div>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold">Lưu tài liệu số</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header bg-dark text-white">📜 Thêm Giấy phép (<code>license</code>) & Danh mục (<code>category</code>)</div>
+                        <div class="card-body">
+                            <form action="/master/add_license" method="POST" class="mb-3 pb-2 border-bottom">
+                                <div class="row g-1 mb-1">
+                                    <div class="col-5"><input type="text" name="license_code" class="form-control form-control-sm" placeholder="Mã GP (VD: CC0)" required></div>
+                                    <div class="col-7"><input type="text" name="license_name" class="form-control form-control-sm" placeholder="Tên đầy đủ giấy phép" required></div>
+                                </div>
+                                <input type="text" name="terms_description" class="form-control form-control-sm mb-1" placeholder="Mô tả điều khoản (terms_description)">
+                                <button type="submit" class="btn btn-sm btn-outline-primary w-100">Thêm Giấy phép</button>
+                            </form>
+                            <form action="/master/add_category" method="POST">
+                                <input type="text" name="category_name" class="form-control form-control-sm mb-1" placeholder="Tên danh mục (category_name)" required>
+                                <input type="text" name="description" class="form-control form-control-sm mb-1" placeholder="Mô tả danh mục (description)">
+                                <button type="submit" class="btn btn-sm btn-outline-dark w-100">Thêm Danh mục</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header bg-secondary text-white">Toàn bộ Kho Tài liệu số (<code>digital_item</code> — {{ data.digital_items_all|length }} bản ghi)</div>
+                        <div class="card-body table-responsive">
+                            <table class="table table-bordered table-sm datatable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Tiêu đề, Abstract & DOI</th>
+                                        <th>Tệp & Định dạng</th>
+                                        <th>Giấy phép</th>
+                                        <th>Mức truy cập & Embargo</th>
+                                        <th>Danh mục</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for d in data.digital_items_all %}
+                                    <tr>
+                                        <td>#{{ d.item_id }}</td>
+                                        <td>
+                                            <strong>{{ d.title }}</strong><br>
+                                            <span class="code-pill">{{ d.doi or 'No DOI' }}</span><br>
+                                            <span class="small text-muted">{{ d.abstract or 'Không có tóm tắt' }}</span>
+                                        </td>
+                                        <td class="small">{{ d.file_path }}<br><span class="badge bg-light text-dark border">{{ d.file_format }}</span></td>
+                                        <td><span class="badge bg-info text-dark">{{ d.license_code }}</span></td>
+                                        <td>
+                                            {% if d.access_level == 'Public_Open_Access' %}<span class="badge bg-success">Public_Open_Access</span>
+                                            {% elif d.access_level == 'Restricted_Campus_Only' %}<span class="badge bg-warning text-dark">Restricted_Campus_Only</span>
+                                            {% else %}
+                                                <span class="badge bg-danger">Embargoed ({{ d.embargo_end_date }})</span>
+                                                <form action="/digital/release_embargo/{{ d.item_id }}" method="POST" class="mt-1">
+                                                    <button class="btn btn-sm btn-outline-success py-0 px-1">Mở công khai</button>
+                                                </form>
+                                            {% endif %}
+                                        </td>
+                                        <td class="small">{{ d.categories or '-' }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-light">Danh sách Giấy phép (<code>license</code> — {{ data.licenses|length }})</div>
+                                <div class="card-body table-responsive">
+                                    <table class="table table-bordered table-sm small">
+                                        <thead><tr><th>ID</th><th>Mã</th><th>Tên & Điều khoản</th></tr></thead>
+                                        <tbody>
+                                            {% for l in data.licenses %}
+                                            <tr><td>{{ l.license_id }}</td><td><code>{{ l.license_code }}</code></td><td><strong>{{ l.license_name }}</strong><br>{{ l.terms_description or '-' }}</td></tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-light">Danh sách Chủ đề (<code>category</code> — {{ data.categories|length }})</div>
+                                <div class="card-body table-responsive">
+                                    <table class="table table-bordered table-sm small">
+                                        <thead><tr><th>ID</th><th>Tên danh mục</th><th>Mô tả</th></tr></thead>
+                                        <tbody>
+                                            {% for c in data.categories %}
+                                            <tr><td>{{ c.category_id }}</td><td><strong>{{ c.category_name }}</strong></td><td>{{ c.description or '-' }}</td></tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: FR-07 QUAN HỆ NHIỀU-NHIỀU (BOOK_AUTHOR, ITEM_AUTHOR, ITEM_CATEGORY) -->
+        <div class="tab-pane fade" id="tab-relations">
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-header bg-primary text-white">Gán Tác giả cho Sách giấy (<code>book_author</code>)</div>
+                        <div class="card-body">
+                            <form action="/relations/assign" method="POST" class="row g-2">
+                                <input type="hidden" name="rel_type" value="book_author">
+                                <div class="col-6"><input type="number" name="book_id" class="form-control form-control-sm" placeholder="Book ID" required></div>
+                                <div class="col-6"><input type="number" name="author_id" class="form-control form-control-sm" placeholder="Author ID" required></div>
+                                <div class="col-12">
+                                    <select name="author_role" class="form-select form-select-sm">
+                                        <option value="Main Author">Main Author</option>
+                                        <option value="Co-Author">Co-Author</option>
+                                        <option value="Editor">Editor</option>
+                                        <option value="Translator">Translator</option>
+                                    </select>
+                                </div>
+                                <div class="col-12"><button class="btn btn-sm btn-primary w-100">Lưu liên kết Sách - Tác giả</button></div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-header bg-success text-white">Gán Tác giả cho Tài liệu số (<code>item_author</code>)</div>
+                        <div class="card-body">
+                            <form action="/relations/assign" method="POST" class="row g-2">
+                                <input type="hidden" name="rel_type" value="item_author">
+                                <div class="col-4"><input type="number" name="item_id" class="form-control form-control-sm" placeholder="Item ID" required></div>
+                                <div class="col-4"><input type="number" name="author_id" class="form-control form-control-sm" placeholder="Author ID" required></div>
+                                <div class="col-4"><input type="number" name="author_order" class="form-control form-control-sm" value="1" min="1" title="Thứ tự"></div>
+                                <div class="col-12"><input type="text" name="author_role" class="form-control form-control-sm" value="Principal Investigator" placeholder="Vai trò (VD: Lead Author)"></div>
+                                <div class="col-12"><button class="btn btn-sm btn-success w-100">Lưu liên kết Tài liệu số - Tác giả</button></div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-header bg-dark text-white">Phân loại Tài liệu số (<code>item_category</code>)</div>
+                        <div class="card-body">
+                            <form action="/relations/assign" method="POST" class="row g-2">
+                                <input type="hidden" name="rel_type" value="item_category">
+                                <div class="col-5"><input type="number" name="item_id" class="form-control form-control-sm" placeholder="Item ID" required></div>
+                                <div class="col-7">
+                                    <select name="category_id" class="form-select form-select-sm">
+                                        {% for c in data.categories %}<option value="{{ c.category_id }}">{{ c.category_name }}</option>{% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-12"><button class="btn btn-sm btn-dark w-100">Gán Danh mục</button></div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-header bg-light">Bảng <code>book_author</code> ({{ data.book_authors|length }} dòng)</div>
+                        <div class="card-body table-responsive">
+                            <table class="table table-bordered table-sm datatable">
+                                <thead><tr><th>Book</th><th>Author</th><th>Vai trò</th></tr></thead>
+                                <tbody>
+                                    {% for ba in data.book_authors %}
+                                    <tr><td>#{{ ba.book_id }} - {{ ba.book_title }}</td><td>#{{ ba.author_id }} - {{ ba.author_name }}</td><td>{{ ba.author_role }}</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-header bg-light">Bảng <code>item_author</code> ({{ data.item_authors|length }} dòng)</div>
+                        <div class="card-body table-responsive">
+                            <table class="table table-bordered table-sm datatable">
+                                <thead><tr><th>Item</th><th>Author</th><th>Thứ tự / Vai trò</th></tr></thead>
+                                <tbody>
+                                    {% for ia in data.item_authors %}
+                                    <tr><td>#{{ ia.item_id }} - {{ ia.item_title }}</td><td>#{{ ia.author_id }} - {{ ia.author_name }}</td><td>#{{ ia.author_order }} ({{ ia.author_role }})</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-header bg-light">Bảng <code>item_category</code> ({{ data.item_categories|length }} dòng)</div>
+                        <div class="card-body table-responsive">
+                            <table class="table table-bordered table-sm datatable">
+                                <thead><tr><th>Item</th><th>Danh mục</th></tr></thead>
+                                <tbody>
+                                    {% for ic in data.item_categories %}
+                                    <tr><td>#{{ ic.item_id }} - {{ ic.item_title }}</td><td>#{{ ic.category_id }} - {{ ic.category_name }}</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 5: FR-02 ĐẦU SÁCH & BẢN SAO -->
+        <div class="tab-pane fade" id="tab-books">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">📕 Thêm Đầu sách Vật lý (<code>physical_book</code>)</div>
+                        <div class="card-body">
+                            <form action="/books/add" method="POST" class="row g-2">
+                                <div class="col-12"><input type="text" name="title" class="form-control form-control-sm" placeholder="Tiêu đề sách" required></div>
+                                <div class="col-5"><input type="text" name="isbn" class="form-control form-control-sm" placeholder="ISBN (UNIQUE)" required></div>
+                                <div class="col-4"><input type="text" name="publisher" class="form-control form-control-sm" placeholder="Nhà xuất bản"></div>
+                                <div class="col-3"><input type="number" name="publication_year" class="form-control form-control-sm" value="2026" placeholder="Năm XB"></div>
+                                <div class="col-12"><button type="submit" class="btn btn-primary btn-sm w-100 fw-bold">Thêm đầu sách</button></div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-success text-white">🏷️ Thêm Bản sao Sách (<code>book_copy</code>)</div>
+                        <div class="card-body">
+                            <form action="/copies/add" method="POST" class="row g-2">
+                                <div class="col-4"><input type="number" name="book_id" class="form-control form-control-sm" value="1" placeholder="Book ID" required></div>
+                                <div class="col-4"><input type="text" name="barcode" class="form-control form-control-sm" placeholder="Barcode (UNIQUE)" required></div>
+                                <div class="col-4"><input type="text" name="shelf_location" class="form-control form-control-sm" placeholder="Vị trí kệ"></div>
+                                <div class="col-12"><button type="submit" class="btn btn-success btn-sm w-100 fw-bold">Thêm bản sao Available</button></div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header bg-light">Toàn bộ Đầu sách (<code>physical_book</code> — {{ data.physical_books|length }})</div>
+                        <div class="card-body table-responsive">
+                            <table class="table table-bordered table-sm datatable">
+                                <thead><tr><th>ID</th><th>Tiêu đề</th><th>ISBN</th><th>NXB</th><th>Năm</th></tr></thead>
+                                <tbody>
+                                    {% for b in data.physical_books %}
+                                    <tr><td>{{ b.book_id }}</td><td>{{ b.title }}</td><td><code>{{ b.isbn }}</code></td><td>{{ b.publisher or '-' }}</td><td>{{ b.publication_year or '-' }}</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header bg-light">Toàn bộ Bản sao (<code>book_copy</code> — {{ data.book_copies|length }})</div>
+                        <div class="card-body table-responsive">
+                            <table class="table table-bordered table-sm datatable">
+                                <thead><tr><th>Copy ID</th><th>Sách</th><th>Barcode</th><th>Trạng thái</th><th>Kệ</th></tr></thead>
+                                <tbody>
+                                    {% for c in data.book_copies %}
+                                    <tr><td>{{ c.copy_id }}</td><td>#{{ c.book_id }} - {{ c.title }}</td><td><code>{{ c.barcode }}</code></td><td>{{ c.copy_status }}</td><td>{{ c.shelf_location or '-' }}</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
+<script>
+    function fillBorrow(memberId, copyId) {
+        document.getElementById('inp_member_id').value = memberId;
+        document.getElementById('inp_copy_id').value = copyId;
+    }
+
+    $(document).ready(function () {
+        $('.datatable').DataTable({
+            deferRender: true,
+            pageLength: 20,
+            lengthMenu: [[10, 20, 50, 100, -1], [10, 20, 50, 100, "Tất cả"]],
+            language: {
+                search: "Tìm nhanh trong bảng:",
+                lengthMenu: "Hiển thị _MENU_ dòng",
+                info: "Đang xem _START_ đến _END_ trong tổng số _TOTAL_ bản ghi",
+                infoEmpty: "Không có dữ liệu",
+                infoFiltered: "(lọc từ _MAX_ bản ghi)",
+                zeroRecords: "Không tìm thấy kết quả khớp",
+                paginate: { first: "Đầu", last: "Cuối", next: "Sau", previous: "Trước" }
+            }
+        });
+    });
+</script>
+</body>
+</html>

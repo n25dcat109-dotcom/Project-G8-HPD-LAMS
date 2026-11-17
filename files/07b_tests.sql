@@ -1,10 +1,10 @@
 -- ===================================================
 -- SYSTEM: DIGITAL LIBRARY & OPEN-ACCESS REPOSITORY
 -- FILE: 07b_tests.sql  (5.1 Kịch bản kiểm thử ràng buộc)
--- Chạy bằng root, sau khi đã chạy 00..04 và 06_seed_data.sql.
+-- Chạy bằng root, sau khi đã chạy 00..04b và 06_seed_data.sql.
 -- Mỗi kịch bản chạy trong transaction rồi ROLLBACK nên không làm đổi dữ liệu seed.
 -- Kết quả: bảng PASS/FAIL cho từng kịch bản ở tab kết quả cuối cùng.
--- Nhóm D (TC-36..TC-43) chỉ PASS khi mục 4 đã có các CHECK và trigger kiểm tra mượn.
+-- Nhóm D (TC-36..TC-44) chỉ PASS khi mục 4 đã có các CHECK và trigger kiểm tra mượn.
 -- ===================================================
 
 USE dloar_db;
@@ -38,8 +38,6 @@ BEGIN
     DECLARE v_errno   INT DEFAULT 0;
     DECLARE v_actual  VARCHAR(255);
     DECLARE v_verdict VARCHAR(10) DEFAULT 'FAIL';
-    -- Mỗi mã lỗi mong đợi có một handler riêng (chỉ ghi lỗi ĐẦU TIÊN);
-    -- handler SQLEXCEPTION cuối cùng bắt mọi lỗi còn lại (ghi -1).
     DECLARE CONTINUE HANDLER FOR 1062 SET v_errno = IF(v_errno = 0, 1062, v_errno);
     DECLARE CONTINUE HANDLER FOR 3819 SET v_errno = IF(v_errno = 0, 3819, v_errno);
     DECLARE CONTINUE HANDLER FOR 1452 SET v_errno = IF(v_errno = 0, 1452, v_errno);
@@ -265,15 +263,15 @@ CALL sp_tc('TC-33', 'BR-05.1', 'Trả đúng hạn: không sinh khoản phạt',
      'UPDATE borrow_transaction SET return_date = CURRENT_DATE WHERE transaction_id = 3000',
      'SELECT CAST(COUNT(*) AS CHAR) INTO @tc_actual FROM fine WHERE transaction_id = 3000',
      NULL, '0');
-CALL sp_tc('TC-34', 'BR-05.1', 'Sách chuyển Damaged: sinh phạt đền bù',
-     NULL,
+CALL sp_tc('TC-34', 'BR-05.1', 'Sách đang mượn chuyển Damaged: sinh phạt đền bù',
+     'INSERT INTO borrow_transaction (member_id, copy_id, borrow_date, due_date) VALUES (1, 1001, CURRENT_DATE, DATE_ADD(CURRENT_DATE, INTERVAL 14 DAY))',
      'UPDATE book_copy SET copy_status = ''Damaged'' WHERE copy_id = 1001',
-     'SELECT CONCAT_WS(''|'', fine_amount, fine_status) INTO @tc_actual FROM fine WHERE transaction_id = 1000',
+     'SELECT CONCAT_WS(''|'', fine_amount, fine_status) INTO @tc_actual FROM fine WHERE transaction_id = LAST_INSERT_ID()',
      NULL, '50000.00|Unpaid');
-CALL sp_tc('TC-35', 'BR-05.1', 'Sách chuyển Lost: sinh phạt đền bù',
-     NULL,
+CALL sp_tc('TC-35', 'BR-05.1', 'Sách đang mượn chuyển Lost: sinh phạt đền bù',
+     'INSERT INTO borrow_transaction (member_id, copy_id, borrow_date, due_date) VALUES (1, 1002, CURRENT_DATE, DATE_ADD(CURRENT_DATE, INTERVAL 14 DAY))',
      'UPDATE book_copy SET copy_status = ''Lost'' WHERE copy_id = 1002',
-     'SELECT CONCAT_WS(''|'', fine_amount, fine_status) INTO @tc_actual FROM fine WHERE transaction_id = 1001',
+     'SELECT CONCAT_WS(''|'', fine_amount, fine_status) INTO @tc_actual FROM fine WHERE transaction_id = LAST_INSERT_ID()',
      NULL, '200000.00|Unpaid');
 
 -- Nhóm D – Quy tắc nghiệp vụ mượn – trả và ràng buộc mức cao
@@ -315,6 +313,11 @@ CALL sp_tc('TC-42', 'BR-03.3', 'Mượn bản sao đang Borrowed',
 CALL sp_tc('TC-43', 'BR-04.1', 'Bản sao đã có giao dịch đang hoạt động',
      NULL,
      'INSERT INTO borrow_transaction (member_id, copy_id, borrow_date, due_date) VALUES (1, 52, CURRENT_DATE, DATE_ADD(CURRENT_DATE, INTERVAL 14 DAY))',
+     NULL,
+     1644, NULL);
+CALL sp_tc('TC-44', 'BR-02.3', 'Thành viên có tổng nợ phạt chưa thanh toán > 100.000 VNĐ mượn sách',
+     'INSERT INTO fine (transaction_id, fine_amount, fine_reason, fine_status) VALUES (600, 150000.00, ''Test nợ phạt vượt ngưỡng'', ''Unpaid'')',
+     'INSERT INTO borrow_transaction (member_id, copy_id, borrow_date, due_date) VALUES (1, 1, CURRENT_DATE, DATE_ADD(CURRENT_DATE, INTERVAL 14 DAY))',
      NULL,
      1644, NULL);
 
